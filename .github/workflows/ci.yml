@@ -15,6 +15,8 @@ jobs:
           node-version: 22.13.x
       - run: npm install
       - run: npm audit --audit-level=high
+      - run: npx expo-doctor
+      - run: npx expo config --type public >/tmp/expo-config.json
       - run: npm run typecheck
 
   web:
