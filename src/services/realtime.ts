@@ -6,7 +6,7 @@ export type RealtimeEvent =
 
 export function connectRealtime(coupleId: string, token: string, onEvent: (event: RealtimeEvent) => void) {
   const wsUrl = API_URL.replace(/^http/, 'ws');
-  const socket = new WebSocket(`${wsUrl}/realtime?coupleId=${encodeURIComponent(coupleId)}&token=${encodeURIComponent(token)}`);
+  const socket = new WebSocket(`${wsUrl}/realtime?coupleId=${encodeURIComponent(coupleId)}`, [`bearer.${token}`]);
   socket.onmessage = message => {
     try { onEvent(JSON.parse(message.data as string) as RealtimeEvent); } catch { /* ignore malformed event */ }
   };
