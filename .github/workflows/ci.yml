@@ -55,3 +55,28 @@ jobs:
           psql -h localhost -U relationship -d relationship_tracker -f server/sql/002_relationship_features.sql
           psql -h localhost -U relationship -d relationship_tracker -f server/sql/003_notifications_assessments.sql
           psql -h localhost -U relationship -d relationship_tracker -f server/sql/004_spotify_oauth.sql
+
+  local-container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build local Docker stack
+        run: docker compose -f docker-compose.local.yml build
+      - name: Start local Docker stack
+        run: docker compose -f docker-compose.local.yml up -d
+      - name: Wait for API
+        run: |
+          for i in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:4000/health; then
+              echo
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose -f docker-compose.local.yml logs
+          exit 1
+      - name: Run API tests in container
+        run: docker compose -f docker-compose.local.yml exec -T api npm test
+      - name: Stop local Docker stack
+        if: always()
+        run: docker compose -f docker-compose.local.yml down -v
