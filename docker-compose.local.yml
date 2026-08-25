@@ -10,7 +10,7 @@ services:
       - "54329:5432"
     volumes:
       - relationship_pgdata:/var/lib/postgresql/data
-      - ./server/migrations:/docker-entrypoint-initdb.d:ro
+      - ./server/sql:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U relationship -d relationship_tracker"]
       interval: 5s
