@@ -1,0 +1,12 @@
+{
+  "name": "Hamqadam",
+  "short_name": "Hamqadam",
+  "description": "A private shared space for two people to stay connected.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0A0712",
+  "theme_color": "#0A0712",
+  "lang": "fa",
+  "dir": "rtl",
+  "icons": []
+}
