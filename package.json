@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "main": "expo-router/entry",
-  "scripts": { "start": "expo start", "android": "expo start --android", "ios": "expo start --ios", "web": "expo start --web", "typecheck": "tsc --noEmit" },
+  "scripts": { "start": "expo start", "android": "expo start --android", "ios": "expo start --ios", "web": "expo start --web", "web:export": "expo export --platform web", "web:local": "expo start --web --localhost", "typecheck": "tsc --noEmit" },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
     "@react-native-async-storage/async-storage": "^2.1.2",
@@ -18,7 +18,9 @@
     "expo-secure-store": "~14.2.3",
     "expo-status-bar": "~2.2.3",
     "react": "19.0.0",
+    "react-dom": "19.0.0",
     "react-native": "0.79.6",
+    "react-native-web": "~0.20.0",
     "zustand": "^5.0.8"
   },
   "devDependencies": { "@types/react": "~19.0.10", "typescript": "~5.8.3" }
