@@ -11,6 +11,7 @@
     "web:export": "expo export --platform web",
     "web:local": "expo start --web --localhost",
     "web:serve": "npx serve dist -l 8080",
+    "web:test": "playwright test",
     "typecheck": "tsc --noEmit",
     "doctor": "npx expo-doctor",
     "lint": "npx expo lint",
@@ -34,10 +35,10 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.0",
-    "react-native-web": "~0.21.0",
-    "zustand": "^5.0.8"
+    "react-native-web": "~0.21.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.55.0",
     "@types/react": "~19.2.3",
     "eslint": "^9.0.0",
     "typescript": "~5.9.3"
