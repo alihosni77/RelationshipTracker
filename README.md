@@ -1,41 +1,22 @@
 # RelationshipTracker
 
-A privacy-first cross-platform relationship companion for two people.
+An Expo / React Native starter for a consent-first shared relationship space.
 
-## Planned modules
+## Included in this iteration
 
-- Couple pairing and authentication
-- Normal, encrypted, and time-capsule messages
-- Shared Spotify playlists and synchronized playback state
-- Love Tap haptic notifications
-- Shared events and countdowns
-- Optional cycle tracking with controlled partner visibility
-- Relationship ratings with anti-abuse scoring
-- Periodic relationship assessments
-- Shared activity/date recommendations
-- Consent-based partner location sharing
+- A polished shared dashboard with event countdown.
+- Love Tap feedback with local haptics; server delivery can be added behind the same action.
+- Message composer with normal, secret, and time-capsule modes.
+- A relationship-score helper designed to limit one-sided scoring (minimum responses, equal per-person influence, recency weighting, disagreement penalty).
+- Privacy-oriented product boundaries for location and cycle-aware features.
 
-## Architecture
-
-- React Native + Expo + TypeScript
-- Expo Router
-- Zustand for local state
-- TanStack Query for server state
-- Supabase for auth, PostgreSQL, realtime, and edge functions
-- Spotify Web API integration
-
-## Privacy principles
-
-1. Location sharing is always opt-in and revocable.
-2. Cycle data is private by default and shared only with explicit permission.
-3. Encrypted messages are designed so the server never needs plaintext.
-4. Relationship scores are feedback signals, not control mechanisms.
-
-## Development
+## Run locally
 
 ```bash
 npm install
-npx expo start
+npm run start
 ```
 
-Create a `.env` file from `.env.example` before connecting Supabase.
+## Before production
+
+Add authenticated backend storage, end-to-end encryption using audited libraries, server-enforced time-capsule unlocks, push notifications, explicit per-feature consent and revocation, Spotify OAuth, and secure location-sharing expiry. Health/cycle data should be opt-in, minimised, and never used for relationship scoring.
