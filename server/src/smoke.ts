@@ -42,6 +42,7 @@ const aliceToken = registeredAlice.accessToken;
 const bobToken = registeredBob.accessToken;
 const outsiderToken = registeredOutsider.accessToken;
 
+await expectFailure('/v1/auth/login', { method: 'POST', body: JSON.stringify({ email: alice.email, password: 'wrong-password' }) }, 401);
 const me = await request<{ user: { email: string } }>('/v1/me', {}, aliceToken);
 if (me.user.email !== alice.email) throw new Error('me endpoint mismatch');
 
@@ -62,6 +63,8 @@ await request('/v1/messages', { method: 'POST', body: JSON.stringify({ kind: 'en
 
 await expectFailure('/v1/messages', { method: 'POST', body: JSON.stringify({ kind: 'time_capsule', ciphertext: 'too-early', unlockAt: new Date(Date.now() - 60_000).toISOString() }) }, 400, aliceToken);
 await request('/v1/messages', { method: 'POST', body: JSON.stringify({ kind: 'time_capsule', ciphertext: 'future-capsule', unlockAt: new Date(Date.now() + 60_000).toISOString() }) }, aliceToken);
+const messages = await request<{ messages: Array<{ kind: string, ciphertext: string }> }>('/v1/messages', {}, bobToken);
+if (messages.messages.some(message => message.ciphertext === 'future-capsule')) throw new Error('locked capsule leaked before unlock time');
 
 await request('/v1/events', { method: 'POST', body: JSON.stringify({ title: 'Smoke Test Date', startsAt: new Date(Date.now() + 86_400_000).toISOString() }) }, bobToken);
 
@@ -88,6 +91,8 @@ await request('/v1/consents', { method: 'POST', body: JSON.stringify({ scope: 'c
 await request('/v1/cycle/entry', { method: 'POST', body: JSON.stringify({ dataCiphertext: 'encrypted-cycle-data', sharedWithPartner: true }) }, aliceToken);
 const partnerCycle = await request<{ entry: unknown | null }>('/v1/cycle/partner', {}, bobToken);
 if (!partnerCycle.entry) throw new Error('shared cycle entry unavailable');
-await request('/v1/consents/location', { method: 'DELETE' }, aliceToken).catch(() => undefined);
+await request('/v1/consents/cycle', { method: 'DELETE' }, aliceToken);
+const revokedCycle = await request<{ entry: unknown | null }>('/v1/cycle/partner', {}, bobToken);
+if (revokedCycle.entry !== null) throw new Error('cycle consent revoke failed');
 
 console.log('API smoke suite passed');
