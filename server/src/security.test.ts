@@ -5,9 +5,9 @@ import { assertProductionSecurity } from './security.js';
 const realProductionConfig = {
   NODE_ENV: 'production' as const,
   JWT_SECRET: 'a'.repeat(64),
-  DATABASE_URL: 'postgresql://prod:real@db.example.com/app',
-  CORS_ORIGINS: 'https://app.example.com',
-  PUBLIC_WEB_ORIGIN: 'https://app.example.com',
+  DATABASE_URL: 'postgresql://prod:real@db.relationshiptracker.test/app',
+  CORS_ORIGINS: 'https://app.relationshiptracker.test',
+  PUBLIC_WEB_ORIGIN: 'https://app.relationshiptracker.test',
 };
 
 test('production rejects placeholder secret', () => {
@@ -21,14 +21,14 @@ test('production rejects wildcard cors', () => {
   assert.throws(() => assertProductionSecurity({
     ...realProductionConfig,
     CORS_ORIGINS: '*',
-  }), /cors_wildcard/);
+  }), /production_cors_wildcard_forbidden/);
 });
 
 test('production requires https public origin', () => {
   assert.throws(() => assertProductionSecurity({
     ...realProductionConfig,
-    PUBLIC_WEB_ORIGIN: 'http://app.example.com',
-  }), /https/);
+    PUBLIC_WEB_ORIGIN: 'http://app.relationshiptracker.test',
+  }), /production_public_web_origin_must_use_https/);
 });
 
 test('development permits localhost http configuration', () => {
