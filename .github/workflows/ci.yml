@@ -12,9 +12,22 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22.13.x
       - run: npm install
       - run: npm run typecheck
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.x
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm run web:export
+      - name: Verify web artifact
+        run: test -f dist/index.html
 
   api:
     runs-on: ubuntu-latest
@@ -25,7 +38,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22.13.x
       - run: npm install
       - run: npm run typecheck
       - run: npm test
@@ -51,10 +64,10 @@ jobs:
         env:
           PGPASSWORD: relationship_ci
         run: |
-          psql -h localhost -U relationship -d relationship_tracker -f server/sql/001_init.sql
-          psql -h localhost -U relationship -d relationship_tracker -f server/sql/002_relationship_features.sql
-          psql -h localhost -U relationship -d relationship_tracker -f server/sql/003_notifications_assessments.sql
-          psql -h localhost -U relationship -d relationship_tracker -f server/sql/004_spotify_oauth.sql
+          for file in server/sql/*.sql; do
+            echo "Applying $file"
+            psql -h localhost -U relationship -d relationship_tracker -f "$file"
+          done
 
   local-container:
     runs-on: ubuntu-latest
