@@ -1,92 +1,99 @@
-# RelationshipTracker
+# Hamqadam / RelationshipTracker
 
-A cross-platform relationship companion built with Expo / React Native and a Node/PostgreSQL backend.
+A privacy-first shared relationship space built with Expo / React Native, with the same UI/UX available on iOS, Android, and Web.
 
-## Local Mac test stack
+## Local Mac testing — recommended Web mode
 
-The recommended local setup keeps the backend infrastructure in Docker and runs the mobile app natively on your Mac so you can use the iOS Simulator with native haptics, notifications, location permissions, and the normal Expo toolchain.
+The easiest way to test the product on a Mac is the **Web build**. Docker runs PostgreSQL and the API, while the same Expo UI runs in Safari or Chrome.
 
-### 1. Start PostgreSQL + API in Docker
-
-Requirements: Docker Desktop with Compose.
+### One-command Docker stack
 
 ```bash
 bash scripts/local-mac.sh up
 ```
 
-Verify the API:
-
-```bash
-curl http://127.0.0.1:4000/health
-```
-
-Expected response:
-
-```json
-{"status":"ok"}
-```
-
-Useful commands:
-
-```bash
-bash scripts/local-mac.sh ps
-bash scripts/local-mac.sh logs
-bash scripts/local-mac.sh test
-bash scripts/local-mac.sh down
-bash scripts/local-mac.sh reset
-```
-
-The local stack exposes:
-
-- API: `http://127.0.0.1:4000`
-- PostgreSQL: `localhost:54329`
-- Database: `relationship_tracker`
-- User: `relationship`
-- Password: `relationship_dev`
-
-These credentials are intentionally local-development-only.
-
-### 2. Run the mobile app natively on macOS
-
-```bash
-cp .env.local.example .env.local
-npm install
-EXPO_PUBLIC_API_URL=http://127.0.0.1:4000 npx expo start --ios
-```
-
-The iOS Simulator can reach the Docker-published API through `127.0.0.1:4000`.
-
-For a physical iPhone on the same LAN, replace `127.0.0.1` with your Mac's LAN IP, for example:
-
-```bash
-EXPO_PUBLIC_API_URL=http://192.168.1.20:4000 npx expo start --ios --device
-```
-
-### 3. Optional integrations
-
-Put these in `.env.local` only when you need them:
+Then open:
 
 ```text
-SPOTIFY_CLIENT_ID=
-SPOTIFY_CLIENT_SECRET=
-SPOTIFY_REDIRECT_URI=relationshiptracker://spotify/callback
-EXPO_ACCESS_TOKEN=
+http://127.0.0.1:8080
 ```
 
-The Docker stack does not require Spotify or Expo credentials for basic local testing.
+API health:
+
+```text
+http://127.0.0.1:4000/health
+```
+
+The local stack contains:
+
+- PostgreSQL 16
+- RelationshipTracker API
+- Expo Web production build served by Nginx
+
+### Open only the Web app
+
+```bash
+bash scripts/local-mac.sh web
+```
+
+This builds and starts the containers and opens the app in the default Mac browser.
+
+### Native Expo Web development mode
+
+For hot reload while developing UI:
+
+```bash
+bash scripts/local-mac.sh native-web
+```
+
+This runs Expo Web locally and points it to the containerized API at `http://127.0.0.1:4000`.
+
+### Local smoke test
+
+```bash
+bash scripts/local-mac.sh smoke
+```
+
+### Stop everything
+
+```bash
+bash scripts/local-mac.sh down
+```
 
 ## Architecture
 
 ```text
-macOS
-├── Expo / React Native (native)
-│   └── iOS Simulator or physical iPhone
-│
-└── Docker Desktop
-    ├── relationship-tracker-api :4000
-    └── PostgreSQL :54329
+Safari / Chrome on Mac
+        │
+        ▼
+   Expo Web UI
+        │
+        ▼
+  localhost:4000
+        │
+        ▼
+RelationshipTracker API
+        │
+        ▼
+ PostgreSQL 16
 ```
 
-## Production hardening still required
+The mobile UI and Web UI share the same React Native component tree and navigation structure. Web-specific adaptations are limited to browser capabilities such as token storage and device notifications.
 
-Before a public release, use production secrets, HTTPS, audited end-to-end encryption, real push credentials, Spotify production credentials, proper Apple/Google signing, secure location-sharing expiry, explicit consent/revocation, and a security review. Cycle/health data remains opt-in, minimised, and isolated from relationship scoring.
+## Included product areas
+
+- Couple pairing and authentication
+- Normal, encrypted, and time-capsule messages
+- Love Tap
+- Shared events and countdowns
+- Relationship score and anti-abuse logic
+- Periodic relationship assessments
+- Shared activity recommendations
+- Consent-based location sharing
+- Cycle/wellbeing data with separate consent
+- Spotify integration scaffolding
+- Realtime API layer
+
+## Before production
+
+Use audited end-to-end encryption libraries, real production secrets, strict CORS, HTTPS/WSS, audited authentication, consent/revocation enforcement, production Spotify credentials, proper push notification credentials, and a security/privacy review before release.
