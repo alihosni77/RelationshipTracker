@@ -57,3 +57,4 @@ jobs:
           psql -h localhost -U relationship -d relationship_tracker -f server/sql/001_init.sql
           psql -h localhost -U relationship -d relationship_tracker -f server/sql/002_relationship_features.sql
           psql -h localhost -U relationship -d relationship_tracker -f server/sql/003_notifications_assessments.sql
+          psql -h localhost -U relationship -d relationship_tracker -f server/sql/004_spotify_oauth.sql
