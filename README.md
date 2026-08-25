@@ -1,22 +1,92 @@
 # RelationshipTracker
 
-An Expo / React Native starter for a consent-first shared relationship space.
+A cross-platform relationship companion built with Expo / React Native and a Node/PostgreSQL backend.
 
-## Included in this iteration
+## Local Mac test stack
 
-- A polished shared dashboard with event countdown.
-- Love Tap feedback with local haptics; server delivery can be added behind the same action.
-- Message composer with normal, secret, and time-capsule modes.
-- A relationship-score helper designed to limit one-sided scoring (minimum responses, equal per-person influence, recency weighting, disagreement penalty).
-- Privacy-oriented product boundaries for location and cycle-aware features.
+The recommended local setup keeps the backend infrastructure in Docker and runs the mobile app natively on your Mac so you can use the iOS Simulator with native haptics, notifications, location permissions, and the normal Expo toolchain.
 
-## Run locally
+### 1. Start PostgreSQL + API in Docker
+
+Requirements: Docker Desktop with Compose.
 
 ```bash
-npm install
-npm run start
+bash scripts/local-mac.sh up
 ```
 
-## Before production
+Verify the API:
 
-Add authenticated backend storage, end-to-end encryption using audited libraries, server-enforced time-capsule unlocks, push notifications, explicit per-feature consent and revocation, Spotify OAuth, and secure location-sharing expiry. Health/cycle data should be opt-in, minimised, and never used for relationship scoring.
+```bash
+curl http://127.0.0.1:4000/health
+```
+
+Expected response:
+
+```json
+{"status":"ok"}
+```
+
+Useful commands:
+
+```bash
+bash scripts/local-mac.sh ps
+bash scripts/local-mac.sh logs
+bash scripts/local-mac.sh test
+bash scripts/local-mac.sh down
+bash scripts/local-mac.sh reset
+```
+
+The local stack exposes:
+
+- API: `http://127.0.0.1:4000`
+- PostgreSQL: `localhost:54329`
+- Database: `relationship_tracker`
+- User: `relationship`
+- Password: `relationship_dev`
+
+These credentials are intentionally local-development-only.
+
+### 2. Run the mobile app natively on macOS
+
+```bash
+cp .env.local.example .env.local
+npm install
+EXPO_PUBLIC_API_URL=http://127.0.0.1:4000 npx expo start --ios
+```
+
+The iOS Simulator can reach the Docker-published API through `127.0.0.1:4000`.
+
+For a physical iPhone on the same LAN, replace `127.0.0.1` with your Mac's LAN IP, for example:
+
+```bash
+EXPO_PUBLIC_API_URL=http://192.168.1.20:4000 npx expo start --ios --device
+```
+
+### 3. Optional integrations
+
+Put these in `.env.local` only when you need them:
+
+```text
+SPOTIFY_CLIENT_ID=
+SPOTIFY_CLIENT_SECRET=
+SPOTIFY_REDIRECT_URI=relationshiptracker://spotify/callback
+EXPO_ACCESS_TOKEN=
+```
+
+The Docker stack does not require Spotify or Expo credentials for basic local testing.
+
+## Architecture
+
+```text
+macOS
+├── Expo / React Native (native)
+│   └── iOS Simulator or physical iPhone
+│
+└── Docker Desktop
+    ├── relationship-tracker-api :4000
+    └── PostgreSQL :54329
+```
+
+## Production hardening still required
+
+Before a public release, use production secrets, HTTPS, audited end-to-end encryption, real push credentials, Spotify production credentials, proper Apple/Google signing, secure location-sharing expiry, explicit consent/revocation, and a security review. Cycle/health data remains opt-in, minimised, and isolated from relationship scoring.
