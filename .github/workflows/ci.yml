@@ -42,6 +42,7 @@ jobs:
       - run: npm install
       - run: npm run typecheck
       - run: npm test
+      - run: npm run build
 
   database:
     runs-on: ubuntu-latest
@@ -88,8 +89,10 @@ jobs:
           done
           docker compose -f docker-compose.local.yml logs
           exit 1
-      - name: Run API tests in container
+      - name: Run API unit tests in container
         run: docker compose -f docker-compose.local.yml exec -T api npm test
+      - name: Run API integration smoke suite in container
+        run: docker compose -f docker-compose.local.yml exec -T api npm run smoke
       - name: Stop local Docker stack
         if: always()
         run: docker compose -f docker-compose.local.yml down -v
