@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: relationship_tracker
+      POSTGRES_USER: relationship
+      POSTGRES_PASSWORD: relationship_dev
+    ports:
+      - "54329:5432"
+    volumes:
+      - relationship_pgdata:/var/lib/postgresql/data
+      - ./server/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U relationship -d relationship_tracker"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://relationship:relationship_dev@db:5432/relationship_tracker
+      JWT_SECRET: local-development-only-change-me-32-characters
+      PORT: 4000
+      NODE_ENV: development
+      ENCRYPTION_KEY: local-development-encryption-key-32
+      SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
+      SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
+      SPOTIFY_REDIRECT_URI: ${SPOTIFY_REDIRECT_URI:-relationshiptracker://spotify/callback}
+      EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:-}
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  relationship_pgdata:
