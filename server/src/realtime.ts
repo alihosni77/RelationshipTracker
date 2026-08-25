@@ -18,7 +18,7 @@ function clientIp(request: IncomingMessage) {
   return request.socket.remoteAddress ?? 'unknown';
 }
 
-export function attachRealtime(server: Server, pool: Pool, jwtSecret: string, nodeEnv = 'development') {
+export function attachRealtime(server: Server, pool: Pool, jwtSecret: string, nodeEnv = process.env.NODE_ENV ?? 'development') {
   const wss = new WebSocketServer({ server, path: '/realtime', clientTracking: true, maxPayload: 16 * 1024 });
   wss.on('connection', async (socket, request) => {
     if (nodeEnv === 'production' && request.headers['x-forwarded-proto'] !== 'https') {
