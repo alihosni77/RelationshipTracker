@@ -9,8 +9,7 @@
     "runtimeVersion": { "policy": "appVersion" },
     "web": {
       "output": "static",
-      "bundler": "metro",
-      "favicon": "./public/favicon.svg"
+      "bundler": "metro"
     },
     "plugins": [
       "expo-router",
