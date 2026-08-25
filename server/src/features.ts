@@ -1,0 +1,65 @@
+import type { Express, Request, Response, NextFunction } from 'express';
+import type { Pool } from 'pg';
+import { z } from 'zod';
+
+type AuthedRequest = Request & { userId?: string };
+type AuthMiddleware = (req: AuthedRequest, res: Response, next: NextFunction) => void;
+
+async function coupleFor(pool: Pool, userId: string) {
+  const result = await pool.query<{ couple_id: string }>('select couple_id from couple_members where user_id=$1 limit 1', [userId]);
+  return result.rows[0]?.couple_id ?? null;
+}
+
+export function attachFeatureRoutes(app: Express, pool: Pool, requireAuth: AuthMiddleware) {
+  app.get('/v1/consents', requireAuth, async (req: AuthedRequest, res, next) => {
+    try { const coupleId = await coupleFor(pool, req.userId!); if (!coupleId) return res.status(400).json({ error: 'not_paired' }); const result = await pool.query('select scope,granted_at,expires_at,revoked_at from consents where couple_id=$1 and user_id=$2 order by scope', [coupleId, req.userId]); res.json({ consents: result.rows }); } catch (e) { next(e); }
+  });
+
+  app.post('/v1/consents', requireAuth, async (req: AuthedRequest, res, next) => {
+    try { const input = z.object({ scope:z.enum(['location','cycle','notifications']), expiresAt:z.string().datetime().optional() }).parse(req.body); const coupleId=await coupleFor(pool,req.userId!); if(!coupleId)return res.status(400).json({error:'not_paired'}); await pool.query('insert into consents(couple_id,user_id,scope,granted_at,expires_at,revoked_at) values($1,$2,$3,now(),$4,null) on conflict do nothing',[coupleId,req.userId,input.scope,input.expiresAt??null]); await pool.query('update consents set granted_at=now(), expires_at=$4, revoked_at=null where couple_id=$1 and user_id=$2 and scope=$3',[coupleId,req.userId,input.scope,input.expiresAt??null]); res.status(201).json({ok:true}); } catch(e){next(e);} 
+  });
+
+  app.delete('/v1/consents/:scope', requireAuth, async (req: AuthedRequest, res, next) => {
+    try { const coupleId=await coupleFor(pool,req.userId!); if(!coupleId)return res.status(400).json({error:'not_paired'}); await pool.query('update consents set revoked_at=now() where couple_id=$1 and user_id=$2 and scope=$3',[coupleId,req.userId,req.params.scope]); res.status(204).end(); } catch(e){next(e);} 
+  });
+
+  app.post('/v1/location/share', requireAuth, async (req: AuthedRequest, res, next) => {
+    try { const input=z.object({latitude:z.number().min(-90).max(90),longitude:z.number().min(-180).max(180),accuracyM:z.number().nonnegative().optional(),expiresAt:z.string().datetime()}).parse(req.body); const coupleId=await coupleFor(pool,req.userId!); if(!coupleId)return res.status(400).json({error:'not_paired'}); const consent=await pool.query('select 1 from consents where couple_id=$1 and user_id=$2 and scope=\'location\' and revoked_at is null and (expires_at is null or expires_at>now())',[coupleId,req.userId]); if(!consent.rowCount)return res.status(403).json({error:'location_consent_required'}); const result=await pool.query('insert into location_shares(couple_id,user_id,latitude,longitude,accuracy_m,expires_at) values($1,$2,$3,$4,$5,$6) returning id,updated_at,expires_at',[coupleId,req.userId,input.latitude,input.longitude,input.accuracyM??null,input.expiresAt]); res.status(201).json({share:result.rows[0]}); } catch(e){next(e);} 
+  });
+
+  app.post('/v1/location/stop', requireAuth, async (req: AuthedRequest, res, next) => {
+    try { const coupleId=await coupleFor(pool,req.userId!); if(!coupleId)return res.status(400).json({error:'not_paired'}); await pool.query('update location_shares set revoked_at=now() where couple_id=$1 and user_id=$2 and revoked_at is null',[coupleId,req.userId]); res.json({ok:true}); } catch(e){next(e);} 
+  });
+
+  app.get('/v1/location/partner', requireAuth, async (req: AuthedRequest, res, next) => {
+    try { const coupleId=await coupleFor(pool,req.userId!); if(!coupleId)return res.status(400).json({error:'not_paired'}); const result=await pool.query('select ls.latitude,ls.longitude,ls.accuracy_m,ls.updated_at,ls.expires_at from location_shares ls join couple_members cm on cm.couple_id=ls.couple_id and cm.user_id<>ls.user_id join consents c on c.couple_id=ls.couple_id and c.user_id=ls.user_id and c.scope=\'location\' and c.revoked_at is null where ls.couple_id=$1 and ls.user_id<>$2 and ls.revoked_at is null and ls.expires_at>now() order by ls.updated_at desc limit 1',[coupleId,req.userId]); res.json({location:result.rows[0]??null}); } catch(e){next(e);} 
+  });
+
+  app.post('/v1/cycle/entry', requireAuth, async (req: AuthedRequest, res, next) => {
+    try { const input=z.object({dataCiphertext:z.string().min(1).max(10000),sharedWithPartner:z.boolean().default(false)}).parse(req.body); const coupleId=await coupleFor(pool,req.userId!); if(!coupleId)return res.status(400).json({error:'not_paired'}); const result=await pool.query('insert into cycle_entries(couple_id,user_id,data_ciphertext,shared_with_partner) values($1,$2,$3,$4) returning id,created_at,shared_with_partner',[coupleId,req.userId,input.dataCiphertext,input.sharedWithPartner]); res.status(201).json({entry:result.rows[0]}); } catch(e){next(e);} 
+  });
+
+  app.get('/v1/cycle/me', requireAuth, async (req: AuthedRequest, res, next) => {
+    try { const coupleId=await coupleFor(pool,req.userId!); if(!coupleId)return res.status(400).json({error:'not_paired'}); const result=await pool.query('select id,data_ciphertext,shared_with_partner,created_at from cycle_entries where couple_id=$1 and user_id=$2 order by created_at desc limit 24',[coupleId,req.userId]); res.json({entries:result.rows}); } catch(e){next(e);} 
+  });
+
+  app.get('/v1/cycle/partner', requireAuth, async (req: AuthedRequest, res, next) => {
+    try { const coupleId=await coupleFor(pool,req.userId!); if(!coupleId)return res.status(400).json({error:'not_paired'}); const result=await pool.query('select ce.id,ce.data_ciphertext,ce.created_at from cycle_entries ce join couple_members cm on cm.couple_id=ce.couple_id and cm.user_id<>ce.user_id where ce.couple_id=$1 and ce.user_id<>$2 and ce.shared_with_partner=true order by ce.created_at desc limit 1',[coupleId,req.userId]); res.json({entry:result.rows[0]??null}); } catch(e){next(e);} 
+  });
+
+  app.get('/v1/activities', requireAuth, async (req: AuthedRequest, res, next) => {
+    try { const coupleId=await coupleFor(pool,req.userId!); if(!coupleId)return res.status(400).json({error:'not_paired'}); const result=await pool.query('select id,title,description,tags,saved_by,created_at from shared_activities where couple_id=$1 order by created_at desc limit 100',[coupleId]); res.json({activities:result.rows}); } catch(e){next(e);} 
+  });
+
+  app.post('/v1/activities', requireAuth, async (req: AuthedRequest, res, next) => {
+    try { const input=z.object({title:z.string().min(1).max(120),description:z.string().max(1000).optional(),tags:z.array(z.string().max(30)).max(10).default([])}).parse(req.body); const coupleId=await coupleFor(pool,req.userId!); if(!coupleId)return res.status(400).json({error:'not_paired'}); const result=await pool.query('insert into shared_activities(couple_id,title,description,tags,saved_by) values($1,$2,$3,$4,$5) returning *',[coupleId,input.title,input.description??null,input.tags,req.userId]); res.status(201).json({activity:result.rows[0]}); } catch(e){next(e);} 
+  });
+
+  app.post('/v1/playback', requireAuth, async (req: AuthedRequest, res, next) => {
+    try { const input=z.object({trackUri:z.string().min(1).max(300),positionMs:z.number().int().min(0).default(0),isPlaying:z.boolean().default(false)}).parse(req.body); const coupleId=await coupleFor(pool,req.userId!); if(!coupleId)return res.status(400).json({error:'not_paired'}); const result=await pool.query('insert into playback_sessions(couple_id,track_uri,position_ms,is_playing,revision,updated_by) values($1,$2,$3,$4,1,$5) on conflict do nothing returning *',[coupleId,input.trackUri,input.positionMs,input.isPlaying,req.userId]); res.status(201).json({session:result.rows[0]??null}); } catch(e){next(e);} 
+  });
+
+  app.get('/v1/playback', requireAuth, async (req: AuthedRequest, res, next) => {
+    try { const coupleId=await coupleFor(pool,req.userId!); if(!coupleId)return res.status(400).json({error:'not_paired'}); const result=await pool.query('select id,track_uri,position_ms,is_playing,revision,updated_by,updated_at from playback_sessions where couple_id=$1 order by updated_at desc limit 1',[coupleId]); res.json({session:result.rows[0]??null}); } catch(e){next(e);} 
+  });
+}
