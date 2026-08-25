@@ -31,3 +31,26 @@ jobs:
           cache-dependency-path: server/package.json
       - run: npm install
       - run: npm run typecheck
+      - run: npm test
+
+  database:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: relationship_ci
+          POSTGRES_DB: relationship_tracker
+          POSTGRES_USER: relationship
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U relationship -d relationship_tracker"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply SQL migrations
+        env:
+          PGPASSWORD: relationship_ci
+        run: psql -h localhost -U relationship -d relationship_tracker -f server/sql/001_init.sql && psql -h localhost -U relationship -d relationship_tracker -f server/sql/002_relationship_features.sql
