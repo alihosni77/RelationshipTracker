@@ -53,4 +53,7 @@ jobs:
       - name: Apply SQL migrations
         env:
           PGPASSWORD: relationship_ci
-        run: psql -h localhost -U relationship -d relationship_tracker -f server/sql/001_init.sql && psql -h localhost -U relationship -d relationship_tracker -f server/sql/002_relationship_features.sql
+        run: |
+          psql -h localhost -U relationship -d relationship_tracker -f server/sql/001_init.sql
+          psql -h localhost -U relationship -d relationship_tracker -f server/sql/002_relationship_features.sql
+          psql -h localhost -U relationship -d relationship_tracker -f server/sql/003_notifications_assessments.sql
