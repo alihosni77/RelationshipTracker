@@ -11,7 +11,6 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.alihosni.relationshiptracker",
       "buildNumber": "1",
-      "supportsTablet": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "موقعیت مکانی فقط با رضایت صریح شما با پارتنر به اشتراک گذاشته می‌شود.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "موقعیت پس‌زمینه فقط در یک جلسه اشتراک‌گذاری که خودتان فعال کرده‌اید استفاده می‌شود.",
@@ -20,9 +19,6 @@
     },
     "android": {
       "permissions": ["VIBRATE", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "ACCESS_BACKGROUND_LOCATION", "POST_NOTIFICATIONS"]
-    },
-    "extra": {
-      "eas": { "projectId": "REPLACE_WITH_EAS_PROJECT_ID" }
     }
   }
 }
