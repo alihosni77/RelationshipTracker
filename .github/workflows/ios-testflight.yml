@@ -1,0 +1,34 @@
+name: iOS TestFlight
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'ios-v*'
+
+jobs:
+  build-and-submit:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate TypeScript
+        run: npm run typecheck
+
+      - name: Build iOS on EAS
+        run: npx eas-cli@latest build --platform ios --profile production --non-interactive --wait
+
+      - name: Submit latest iOS build to TestFlight
+        run: npx eas-cli@latest submit --platform ios --profile production --latest --non-interactive --wait
