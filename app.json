@@ -1,8 +1,28 @@
 {
   "expo": {
-    "name": "RelationshipTracker", "slug": "relationship-tracker", "version": "0.1.0", "orientation": "portrait", "scheme": "relationshiptracker", "userInterfaceStyle": "dark",
+    "name": "Hamqadam",
+    "slug": "relationship-tracker",
+    "version": "0.3.0",
+    "orientation": "portrait",
+    "scheme": "relationshiptracker",
+    "userInterfaceStyle": "dark",
     "plugins": ["expo-router", "expo-haptics", "expo-secure-store", "expo-notifications", "expo-location"],
-    "ios": { "supportsTablet": true, "infoPlist": { "NSLocationWhenInUseUsageDescription": "Location is shared only after you explicitly agree.", "NSLocationAlwaysAndWhenInUseUsageDescription": "Background location is only used during an explicitly enabled sharing session." } },
-    "android": { "permissions": ["VIBRATE", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "ACCESS_BACKGROUND_LOCATION", "POST_NOTIFICATIONS"] }
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.alihosni.relationshiptracker",
+      "buildNumber": "1",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "موقعیت مکانی فقط با رضایت صریح شما با پارتنر به اشتراک گذاشته می‌شود.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "موقعیت پس‌زمینه فقط در یک جلسه اشتراک‌گذاری که خودتان فعال کرده‌اید استفاده می‌شود.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "permissions": ["VIBRATE", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "ACCESS_BACKGROUND_LOCATION", "POST_NOTIFICATIONS"]
+    },
+    "extra": {
+      "eas": { "projectId": "REPLACE_WITH_EAS_PROJECT_ID" }
+    }
   }
 }
