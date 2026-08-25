@@ -1,1 +1,26 @@
-export const theme = { colors: { background:'#09090B', surface:'#141418', surfaceElevated:'#1C1C23', text:'#FAFAFA', muted:'#A1A1AA', border:'#27272A', primary:'#F43F5E', secondary:'#A855F7', success:'#22C55E', warning:'#F59E0B' }, radius:{sm:10,md:16,lg:24,pill:999} } as const;
+export const theme = {
+  colors: {
+    background: '#07070A',
+    backgroundSoft: '#0D0D12',
+    surface: '#111118',
+    surfaceElevated: '#191923',
+    surfaceWarm: '#24131A',
+    text: '#FCFCFD',
+    textSoft: '#E4E4E7',
+    muted: '#9898A5',
+    border: '#242430',
+    borderStrong: '#353545',
+    primary: '#FF3B63',
+    primarySoft: '#FF6D89',
+    secondary: '#A970FF',
+    secondarySoft: '#C9A7FF',
+    success: '#30D158',
+    warning: '#FFD60A',
+    danger: '#FF453A',
+  },
+  radius: { xs: 8, sm: 12, md: 18, lg: 28, xl: 36, pill: 999 },
+  shadow: {
+    card: { shadowColor: '#000000', shadowOpacity: 0.28, shadowRadius: 20, shadowOffset: { width: 0, height: 12 }, elevation: 10 },
+    glow: { shadowColor: '#FF3B63', shadowOpacity: 0.22, shadowRadius: 26, shadowOffset: { width: 0, height: 8 }, elevation: 14 },
+  },
+} as const;
