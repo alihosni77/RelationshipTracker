@@ -2,11 +2,28 @@
   "expo": {
     "name": "Hamqadam",
     "slug": "relationship-tracker",
-    "version": "0.3.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "relationshiptracker",
     "userInterfaceStyle": "dark",
-    "plugins": ["expo-router", "expo-haptics", "expo-secure-store", "expo-notifications", "expo-location"],
+    "runtimeVersion": { "policy": "appVersion" },
+    "web": {
+      "output": "static",
+      "bundler": "metro",
+      "favicon": "./public/favicon.svg"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-haptics",
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "enableBackgroundRemoteNotifications": true
+        }
+      ],
+      "expo-location"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.alihosni.relationshiptracker",
@@ -18,7 +35,19 @@
       }
     },
     "android": {
-      "permissions": ["VIBRATE", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "ACCESS_BACKGROUND_LOCATION", "POST_NOTIFICATIONS"]
+      "package": "com.alihosni.relationshiptracker",
+      "versionCode": 1,
+      "permissions": [
+        "VIBRATE",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "POST_NOTIFICATIONS"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./public/icon-foreground.png",
+        "backgroundColor": "#0A0712"
+      }
     }
   }
 }
