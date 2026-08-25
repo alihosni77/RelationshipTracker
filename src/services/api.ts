@@ -2,10 +2,32 @@ import * as SecureStore from 'expo-secure-store';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://127.0.0.1:4000';
 const TOKEN_KEY = 'relationship_tracker_access_token';
+const isWeb = typeof document !== 'undefined';
 
-export async function setToken(token: string) { await SecureStore.setItemAsync(TOKEN_KEY, token); }
-export async function getToken() { return SecureStore.getItemAsync(TOKEN_KEY); }
-export async function clearToken() { await SecureStore.deleteItemAsync(TOKEN_KEY); }
+async function setStoredToken(token: string) {
+  if (isWeb) {
+    window.localStorage.setItem(TOKEN_KEY, token);
+    return;
+  }
+  await SecureStore.setItemAsync(TOKEN_KEY, token);
+}
+
+async function getStoredToken() {
+  if (isWeb) return window.localStorage.getItem(TOKEN_KEY);
+  return SecureStore.getItemAsync(TOKEN_KEY);
+}
+
+async function removeStoredToken() {
+  if (isWeb) {
+    window.localStorage.removeItem(TOKEN_KEY);
+    return;
+  }
+  await SecureStore.deleteItemAsync(TOKEN_KEY);
+}
+
+export async function setToken(token: string) { await setStoredToken(token); }
+export async function getToken() { return getStoredToken(); }
+export async function clearToken() { await removeStoredToken(); }
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = await getToken();
