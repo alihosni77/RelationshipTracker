@@ -10,16 +10,17 @@ import { z } from 'zod';
 import { attachRealtime, broadcast } from './realtime.js';
 import { attachFeatureRoutes } from './features.js';
 import { attachSpotifyRoutes } from './spotify.js';
+import { sendPartnerPush } from './push.js';
 
-const env = z.object({ DATABASE_URL: z.string().url(), JWT_SECRET: z.string().min(32), PORT: z.coerce.number().default(4000) }).parse(process.env);
-const pool = new Pool({ connectionString: env.DATABASE_URL, max: 10 });
+const env = z.object({ DATABASE_URL:z.string().url(), JWT_SECRET:z.string().min(32), PORT:z.coerce.number().default(4000) }).parse(process.env);
+const pool = new Pool({ connectionString:env.DATABASE_URL, max:10 });
 const app = express();
-app.use(cors({ origin: true, credentials: false }));
-app.use(express.json({ limit: '64kb' }));
+app.use(cors({ origin:true, credentials:false }));
+app.use(express.json({ limit:'64kb' }));
 
-type AuthedRequest = Request & { userId?: string };
-const tokenFor = (userId: string) => jwt.sign({ sub: userId }, env.JWT_SECRET, { expiresIn: '15m', issuer: 'relationship-tracker', audience: 'mobile' });
-function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) { const raw=req.header('authorization')?.replace(/^Bearer\s+/i,''); if(!raw)return res.status(401).json({error:'unauthorized'}); try{req.userId=String(jwt.verify(raw,env.JWT_SECRET,{issuer:'relationship-tracker',audience:'mobile'}).sub);next();}catch{res.status(401).json({error:'unauthorized'});} }
+type AuthedRequest = Request & { userId?:string };
+const tokenFor=(userId:string)=>jwt.sign({sub:userId},env.JWT_SECRET,{expiresIn:'15m',issuer:'relationship-tracker',audience:'mobile'});
+function requireAuth(req:AuthedRequest,res:Response,next:NextFunction){const raw=req.header('authorization')?.replace(/^Bearer\s+/i,'');if(!raw)return res.status(401).json({error:'unauthorized'});try{req.userId=String(jwt.verify(raw,env.JWT_SECRET,{issuer:'relationship-tracker',audience:'mobile'}).sub);next();}catch{res.status(401).json({error:'unauthorized'});}}
 function validate<T extends z.ZodTypeAny>(schema:T,body:unknown):z.infer<T>{return schema.parse(body);}
 async function coupleFor(userId:string){const result=await pool.query<{couple_id:string}>('select couple_id from couple_members where user_id=$1 limit 1',[userId]);return result.rows[0]?.couple_id??null;}
 
@@ -36,7 +37,7 @@ app.get('/v1/couples/me',requireAuth,async(req:AuthedRequest,res,next)=>{try{con
 app.get('/v1/messages',requireAuth,async(req:AuthedRequest,res,next)=>{try{const coupleId=await coupleFor(req.userId!);if(!coupleId)return res.status(400).json({error:'not_paired'});const result=await pool.query('select id,sender_id,kind,ciphertext,key_envelope,unlock_at,created_at from messages where couple_id=$1 and (kind<>\'time_capsule\' or unlock_at is null or unlock_at<=now()) order by created_at desc limit 100',[coupleId]);res.json({messages:result.rows});}catch(error){next(error);}});
 app.post('/v1/messages',requireAuth,async(req:AuthedRequest,res,next)=>{try{const input=validate(z.object({kind:z.enum(['normal','encrypted','time_capsule']),ciphertext:z.string().min(1).max(20000),keyEnvelope:z.string().max(10000).optional(),unlockAt:z.string().datetime().optional()}),req.body);const coupleId=await coupleFor(req.userId!);if(!coupleId)return res.status(400).json({error:'not_paired'});if(input.kind==='time_capsule'&&!input.unlockAt)return res.status(400).json({error:'unlock_at_required'});if(input.kind!=='time_capsule'&&input.unlockAt)return res.status(400).json({error:'unlock_at_not_allowed'});if(input.kind==='time_capsule'&&new Date(input.unlockAt!).getTime()<=Date.now())return res.status(400).json({error:'unlock_at_must_be_future'});const result=await pool.query('insert into messages(couple_id,sender_id,kind,ciphertext,key_envelope,unlock_at) values($1,$2,$3,$4,$5,$6) returning id,sender_id,kind,ciphertext,key_envelope,unlock_at,created_at',[coupleId,req.userId,input.kind,input.ciphertext,input.keyEnvelope??null,input.unlockAt??null]);const message=result.rows[0];broadcast(coupleId,{type:'message',coupleId,messageId:message.id,createdAt:message.created_at});res.status(201).json({message});}catch(error){next(error);}});
 
-app.post('/v1/love-taps',requireAuth,async(req:AuthedRequest,res,next)=>{try{const coupleId=await coupleFor(req.userId!);if(!coupleId)return res.status(400).json({error:'not_paired'});const result=await pool.query('insert into love_taps(couple_id,sender_id) values($1,$2) returning id,created_at',[coupleId,req.userId]);const tap=result.rows[0];broadcast(coupleId,{type:'love_tap',coupleId,senderId:req.userId!,createdAt:tap.created_at});res.status(201).json({tap});}catch(error){next(error);}});
+app.post('/v1/love-taps',requireAuth,async(req:AuthedRequest,res,next)=>{try{const coupleId=await coupleFor(req.userId!);if(!coupleId)return res.status(400).json({error:'not_paired'});const result=await pool.query('insert into love_taps(couple_id,sender_id) values($1,$2) returning id,created_at',[coupleId,req.userId]);const tap=result.rows[0];broadcast(coupleId,{type:'love_tap',coupleId,senderId:req.userId!,createdAt:tap.created_at});void sendPartnerPush(pool,coupleId,req.userId!,'❤️ پارتنرت برایت یک ضربه عشق فرستاد.');res.status(201).json({tap});}catch(error){next(error);}});
 app.get('/v1/love-taps/latest',requireAuth,async(req:AuthedRequest,res,next)=>{try{const coupleId=await coupleFor(req.userId!);if(!coupleId)return res.status(400).json({error:'not_paired'});const result=await pool.query('select id,sender_id,created_at from love_taps where couple_id=$1 and sender_id<>$2 order by created_at desc limit 1',[coupleId,req.userId]);res.json({tap:result.rows[0]??null});}catch(error){next(error);}});
 
 app.get('/v1/events',requireAuth,async(req:AuthedRequest,res,next)=>{try{const coupleId=await coupleFor(req.userId!);if(!coupleId)return res.status(400).json({error:'not_paired'});const result=await pool.query('select id,title,starts_at,ends_at,notes,created_by,created_at from shared_events where couple_id=$1 order by starts_at asc limit 200',[coupleId]);res.json({events:result.rows});}catch(error){next(error);}});
