@@ -14,7 +14,8 @@ export function attachRealtime(server: Server, pool: Pool, jwtSecret: string) {
   wss.on('connection', async (socket, request) => {
     const url = new URL(request.url ?? '', 'http://localhost');
     const coupleId = url.searchParams.get('coupleId');
-    const token = url.searchParams.get('token');
+    const protocol = request.headers['sec-websocket-protocol'];
+    const token = Array.isArray(protocol) ? protocol.find(value => value.startsWith('bearer.'))?.slice(7) : protocol?.startsWith('bearer.') ? protocol.slice(7) : undefined;
     if (!coupleId || !token) return socket.close(1008, 'authentication required');
     try {
       const payload = jwt.verify(token, jwtSecret, { issuer: 'relationship-tracker', audience: 'mobile' });
