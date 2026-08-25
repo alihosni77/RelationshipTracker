@@ -43,11 +43,7 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
         "POST_NOTIFICATIONS"
-      ],
-      "adaptiveIcon": {
-        "foregroundImage": "./public/icon-foreground.png",
-        "backgroundColor": "#0A0712"
-      }
+      ]
     }
   }
 }
