@@ -15,10 +15,14 @@ export function attachRealtime(server: Server, pool: Pool, jwtSecret: string) {
     const url = new URL(request.url ?? '', 'http://localhost');
     const coupleId = url.searchParams.get('coupleId');
     const protocol = request.headers['sec-websocket-protocol'];
-    const token = Array.isArray(protocol) ? protocol.find(value => value.startsWith('bearer.'))?.slice(7) : protocol?.startsWith('bearer.') ? protocol.slice(7) : undefined;
+    const token = Array.isArray(protocol)
+      ? protocol.find(value => value.startsWith('bearer.'))?.slice(7)
+      : protocol?.startsWith('bearer.')
+        ? protocol.slice(7)
+        : undefined;
     if (!coupleId || !token) return socket.close(1008, 'authentication required');
     try {
-      const payload = jwt.verify(token, jwtSecret, { issuer: 'relationship-tracker', audience: 'mobile' });
+      const payload = jwt.verify(token, jwtSecret, { issuer: 'relationship-tracker', audience: 'relationship-client' });
       const userId = String((payload as jwt.JwtPayload).sub);
       const member = await pool.query('select 1 from couple_members where couple_id=$1 and user_id=$2', [coupleId, userId]);
       if (!member.rowCount) return socket.close(1008, 'not a couple member');
