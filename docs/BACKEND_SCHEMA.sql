@@ -1,0 +1,8 @@
+-- Supabase reference schema. Apply only after reviewing with your security model.
+create table couples (id uuid primary key default gen_random_uuid(), created_at timestamptz not null default now());
+create table couple_members (couple_id uuid references couples(id) on delete cascade, user_id uuid references auth.users(id) on delete cascade, role text not null check (role in ('member')), primary key (couple_id, user_id));
+create table consents (id uuid primary key default gen_random_uuid(), couple_id uuid references couples(id) on delete cascade, user_id uuid references auth.users(id) on delete cascade, scope text not null, granted_at timestamptz, expires_at timestamptz, revoked_at timestamptz);
+create table messages (id uuid primary key default gen_random_uuid(), couple_id uuid references couples(id) on delete cascade, sender_id uuid references auth.users(id), kind text not null check (kind in ('normal','encrypted','time_capsule')), ciphertext text, key_envelope text, unlock_at timestamptz, created_at timestamptz not null default now());
+create table shared_events (id uuid primary key default gen_random_uuid(), couple_id uuid references couples(id) on delete cascade, title text not null, starts_at timestamptz not null, ends_at timestamptz, notes text, created_by uuid references auth.users(id), created_at timestamptz not null default now());
+create table relationship_ratings (id uuid primary key default gen_random_uuid(), couple_id uuid references couples(id) on delete cascade, rater_id uuid references auth.users(id), category text not null, value smallint not null check (value between 1 and 5), created_at timestamptz not null default now());
+-- Enable RLS on every table. Policies must require couple_members membership for both reads and writes.
