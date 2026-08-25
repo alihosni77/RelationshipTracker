@@ -11,6 +11,8 @@ import { attachRealtime, broadcast } from './realtime.js';
 import { attachFeatureRoutes } from './features.js';
 import { attachSpotifyRoutes } from './spotify.js';
 import { sendPartnerPush } from './push.js';
+import { auditSecurityEvent, assertProductionSecurity, assertSecureRequest, canAttemptLogin, clearLoginFailures, recordLoginFailure } from './security.js';
+import { issueSession, revokeAllSessions, revokeSession, rotateSession, authTokenPolicy } from './session.js';
 
 const env = z.object({
   DATABASE_URL: z.string().url(),
@@ -18,17 +20,26 @@ const env = z.object({
   PORT: z.coerce.number().default(4000),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   CORS_ORIGINS: z.string().default('http://127.0.0.1:8080,http://localhost:8080'),
+  PUBLIC_WEB_ORIGIN: z.string().url().default('http://127.0.0.1:8080'),
+  AUDIT_HASH_SALT: z.string().min(16).default('development-audit-salt-change-me'),
 }).parse(process.env);
+
+assertProductionSecurity(env);
 
 const pool = new Pool({ connectionString: env.DATABASE_URL, max: 10, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 5_000 });
 const app = express();
+app.set('trust proxy', 1);
 const allowedOrigins = new Set(env.CORS_ORIGINS.split(',').map((value) => value.trim()).filter(Boolean));
 
 app.disable('x-powered-by');
+app.use((req, _res, next) => {
+  try { assertSecureRequest(req, env.NODE_ENV); next(); }
+  catch (error) { next(error); }
+});
 app.use(cors({
   credentials: false,
   origin(origin, callback) {
-    if (!origin || allowedOrigins.has('*') || allowedOrigins.has(origin)) return callback(null, true);
+    if (!origin || allowedOrigins.has(origin)) return callback(null, true);
     return callback(new Error('cors_not_allowed'));
   },
 }));
@@ -37,22 +48,17 @@ app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'no-referrer');
-  res.setHeader('Permissions-Policy', 'geolocation=(self), microphone=(), camera=()');
+  res.setHeader('Permissions-Policy', 'geolocation=(self), microphone=(), camera=());
   if (env.NODE_ENV === 'production') res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   next();
 });
 
 type AuthedRequest = Request & { userId?: string };
-const tokenFor = (userId: string) => jwt.sign(
-  { sub: userId },
-  env.JWT_SECRET,
-  { expiresIn: '7d', issuer: 'relationship-tracker', audience: 'relationship-client' },
-);
 function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
   const raw = req.header('authorization')?.replace(/^Bearer\s+/i, '');
   if (!raw) return res.status(401).json({ error: 'unauthorized' });
   try {
-    req.userId = String(jwt.verify(raw, env.JWT_SECRET, { issuer: 'relationship-tracker', audience: 'relationship-client' }).sub);
+    req.userId = String(jwt.verify(raw, env.JWT_SECRET, authTokenPolicy.issuer ? { issuer: authTokenPolicy.issuer, audience: authTokenPolicy.audience } : undefined).sub);
     next();
   } catch { res.status(401).json({ error: 'unauthorized' }); }
 }
@@ -92,26 +98,63 @@ app.post('/v1/auth/register', authRateLimit, async (req, res, next) => {
     const created = await pool.query<{ id: string; email: string; display_name: string }>('insert into users(email,password_hash,display_name) values($1,$2,$3) returning id,email,display_name', [input.email, hash, input.displayName]);
     const user = created.rows[0];
     await pool.query('insert into auth_identities(user_id,provider,provider_subject) values($1,$2,$3)', [user.id, 'password', user.email]);
-    res.status(201).json({ user: { id: user.id, email: user.email, displayName: user.display_name }, accessToken: tokenFor(user.id) });
+    const session = await issueSession(pool, user.id, env.JWT_SECRET);
+    await auditSecurityEvent(pool, { actorUserId: user.id, eventType: 'register', ip: req.ip }, env.AUDIT_HASH_SALT);
+    res.status(201).json({ user: { id: user.id, email: user.email, displayName: user.display_name }, ...session });
   } catch (error) { next(error); }
 });
+
 app.post('/v1/auth/login', authRateLimit, async (req, res, next) => {
   try {
     const input = validate(z.object({ email: z.string().email().transform(v => v.toLowerCase()), password: z.string().min(1) }), req.body);
+    const lookupKey = createHash('sha256').update(`email:${input.email}`).digest('hex');
+    const allowed = await canAttemptLogin(pool, lookupKey);
+    if (!allowed.allowed) return res.status(429).json({ error: 'account_temporarily_locked', retryAfterSeconds: allowed.retryAfterSeconds });
     const found = await pool.query<{ id: string; email: string; display_name: string; password_hash: string | null }>('select id,email,display_name,password_hash from users where email=$1', [input.email]);
     const user = found.rows[0];
-    if (!user?.password_hash || !(await bcrypt.compare(input.password, user.password_hash))) return res.status(401).json({ error: 'invalid_credentials' });
-    res.json({ user: { id: user.id, email: user.email, displayName: user.display_name }, accessToken: tokenFor(user.id) });
+    if (!user?.password_hash || !(await bcrypt.compare(input.password, user.password_hash))) {
+      await recordLoginFailure(pool, lookupKey);
+      await auditSecurityEvent(pool, { eventType: 'login_failed', success: false, ip: req.ip }, env.AUDIT_HASH_SALT);
+      return res.status(401).json({ error: 'invalid_credentials' });
+    }
+    await clearLoginFailures(pool, lookupKey);
+    const session = await issueSession(pool, user.id, env.JWT_SECRET);
+    await auditSecurityEvent(pool, { actorUserId: user.id, eventType: 'login_success', ip: req.ip }, env.AUDIT_HASH_SALT);
+    res.json({ user: { id: user.id, email: user.email, displayName: user.display_name }, ...session });
   } catch (error) { next(error); }
 });
+
+app.post('/v1/auth/refresh', async (req, res, next) => {
+  try {
+    const input = validate(z.object({ refreshToken: z.string().min(40).max(200) }), req.body);
+    const session = await rotateSession(pool, input.refreshToken, env.JWT_SECRET);
+    await auditSecurityEvent(pool, { actorUserId: session.userId, eventType: 'session_rotated', ip: req.ip }, env.AUDIT_HASH_SALT);
+    res.json(session);
+  } catch (error) {
+    if (error instanceof Error && error.message === 'invalid_refresh_token') return res.status(401).json({ error: 'invalid_refresh_token' });
+    next(error);
+  }
+});
+
+app.post('/v1/auth/logout', requireAuth, async (req: AuthedRequest, res, next) => {
+  try {
+    const input = validate(z.object({ refreshToken: z.string().min(40).max(200).optional() }), req.body ?? {});
+    if (input.refreshToken) await revokeSession(pool, input.refreshToken);
+    else await revokeAllSessions(pool, req.userId!);
+    await auditSecurityEvent(pool, { actorUserId: req.userId, eventType: 'logout', ip: req.ip }, env.AUDIT_HASH_SALT);
+    res.status(204).end();
+  } catch (error) { next(error); }
+});
+
 app.get('/v1/me', requireAuth, async (req: AuthedRequest, res, next) => {
   try { const result = await pool.query('select id,email,display_name from users where id=$1', [req.userId]); res.json({ user: result.rows[0] }); }
   catch (error) { next(error); }
 });
 
-app.post('/v1/couples', requireAuth, async (req: AuthedRequest, res, next) => { try { const existing = await coupleFor(req.userId!); if (existing) return res.status(409).json({ error: 'already_paired', coupleId: existing }); const created = await pool.query<{ id: string }>('insert into couples default values returning id'); await pool.query('insert into couple_members(couple_id,user_id) values($1,$2)', [created.rows[0].id, req.userId]); res.status(201).json({ coupleId: created.rows[0].id }); } catch (error) { next(error); } });
-app.post('/v1/couples/invitations', requireAuth, async (req: AuthedRequest, res, next) => { try { const coupleId = await coupleFor(req.userId!); if (!coupleId) return res.status(400).json({ error: 'not_paired' }); const members = await pool.query('select count(*)::int as count from couple_members where couple_id=$1', [coupleId]); if (members.rows[0].count >= 2) return res.status(409).json({ error: 'couple_full' }); const token = randomBytes(24).toString('base64url'); const hash = createHash('sha256').update(token).digest('hex'); await pool.query('insert into invitations(couple_id,created_by,token_hash,expires_at) values($1,$2,$3,now()+interval \'24 hours\')', [coupleId, req.userId, hash]); res.status(201).json({ token, expiresInHours: 24 }); } catch (error) { next(error); } });
-app.post('/v1/couples/invitations/accept', requireAuth, async (req: AuthedRequest, res, next) => { try { const { token } = validate(z.object({ token: z.string().min(20).max(128) }), req.body); if (await coupleFor(req.userId!)) return res.status(409).json({ error: 'already_paired' }); const hash = createHash('sha256').update(token).digest('hex'); const found = await pool.query<{ id: string; couple_id: string }>('select id,couple_id from invitations where token_hash=$1 and expires_at>now() and accepted_at is null', [hash]); if (!found.rows[0]) return res.status(404).json({ error: 'invalid_or_expired_invitation' }); const members = await pool.query('select count(*)::int as count from couple_members where couple_id=$1', [found.rows[0].couple_id]); if (members.rows[0].count >= 2) return res.status(409).json({ error: 'couple_full' }); const client = await pool.connect(); try { await client.query('begin'); await client.query('insert into couple_members(couple_id,user_id) values($1,$2)', [found.rows[0].couple_id, req.userId]); await client.query('update invitations set accepted_at=now() where id=$1', [found.rows[0].id]); await client.query('commit'); } catch (e) { await client.query('rollback'); throw e; } finally { client.release(); } res.json({ coupleId: found.rows[0].couple_id }); } catch (error) { next(error); } });
+app.post('/v1/couples', requireAuth, async (req: AuthedRequest, res, next) => { try { const existing = await coupleFor(req.userId!); if (existing) return res.status(409).json({ error: 'already_paired', coupleId: existing }); const created = await pool.query<{ id: string }>('insert into couples default values returning id'); await pool.query('insert into couple_members(couple_id,user_id) values($1,$2)', [created.rows[0].id, req.userId]); await auditSecurityEvent(pool, { actorUserId: req.userId, coupleId: created.rows[0].id, eventType: 'couple_created', ip: req.ip }, env.AUDIT_HASH_SALT); res.status(201).json({ coupleId: created.rows[0].id }); } catch (error) { next(error); } });
+app.post('/v1/couples/invitations', requireAuth, async (req: AuthedRequest, res, next) => { try { const coupleId = await coupleFor(req.userId!); if (!coupleId) return res.status(400).json({ error: 'not_paired' }); const members = await pool.query('select count(*)::int as count from couple_members where couple_id=$1', [coupleId]); if (members.rows[0].count >= 2) return res.status(409).json({ error: 'couple_full' }); const token = randomBytes(24).toString('base64url'); const hash = createHash('sha256').update(token).digest('hex'); await pool.query('insert into invitations(couple_id,created_by,token_hash,expires_at) values($1,$2,$3,now()+interval \'24 hours\')', [coupleId, req.userId, hash]); await auditSecurityEvent(pool, { actorUserId: req.userId, coupleId, eventType: 'pairing_invitation_created', ip: req.ip }, env.AUDIT_HASH_SALT); res.status(201).json({ token, expiresInHours: 24 }); } catch (error) { next(error); } });
+app.post('/v1/couples/invitations/accept', requireAuth, async (req: AuthedRequest, res, next) => { try { const { token } = validate(z.object({ token: z.string().min(20).max(128) }), req.body); if (await coupleFor(req.userId!)) return res.status(409).json({ error: 'already_paired' }); const hash = createHash('sha256').update(token).digest('hex'); const found = await pool.query<{ id: string; couple_id: string }>('select id,couple_id from invitations where token_hash=$1 and expires_at>now() and accepted_at is null', [hash]); if (!found.rows[0]) return res.status(404).json({ error: 'invalid_or_expired_invitation' }); const members = await pool.query('select count(*)::int as count from couple_members where couple_id=$1', [found.rows[0].couple_id]); if (members.rows[0].count >= 2) return res.status(409).json({ error: 'couple_full' }); const client = await pool.connect(); try { await client.query('begin'); await client.query('insert into couple_members(couple_id,user_id) values($1,$2)', [found.rows[0].couple_id, req.userId]); await client.query('update invitations set accepted_at=now() where id=$1', [found.rows[0].id]); await client.query('commit'); } catch (e) { await client.query('rollback'); throw e; } finally { client.release(); } await auditSecurityEvent(pool, { actorUserId: req.userId, coupleId: found.rows[0].couple_id, eventType: 'pairing_completed', ip: req.ip }, env.AUDIT_HASH_SALT); res.json({ coupleId: found.rows[0].couple_id }); } catch (error) { next(error); } });
+app.post('/v1/couples/unlink', requireAuth, async (req: AuthedRequest, res, next) => { try { const coupleId = await coupleFor(req.userId!); if (!coupleId) return res.status(400).json({ error: 'not_paired' }); await pool.query('delete from couple_members where couple_id=$1 and user_id=$2', [coupleId, req.userId]); await pool.query('update consents set revoked_at=now() where couple_id=$1 and user_id=$2 and revoked_at is null', [coupleId, req.userId]); await revokeAllSessions(pool, req.userId!); await auditSecurityEvent(pool, { actorUserId: req.userId, coupleId, eventType: 'couple_unlinked', ip: req.ip }, env.AUDIT_HASH_SALT); res.status(204).end(); } catch (error) { next(error); } });
 app.get('/v1/couples/me', requireAuth, async (req: AuthedRequest, res, next) => { try { const coupleId = await coupleFor(req.userId!); if (!coupleId) return res.json({ couple: null }); const members = await pool.query('select u.id,u.display_name from couple_members cm join users u on u.id=cm.user_id where cm.couple_id=$1', [coupleId]); res.json({ couple: { id: coupleId, members: members.rows } }); } catch (error) { next(error); } });
 
 app.get('/v1/messages', requireAuth, async (req: AuthedRequest, res, next) => { try { const coupleId = await coupleFor(req.userId!); if (!coupleId) return res.status(400).json({ error: 'not_paired' }); const result = await pool.query('select id,sender_id,kind,ciphertext,key_envelope,unlock_at,created_at from messages where couple_id=$1 and (kind<>\'time_capsule\' or unlock_at is null or unlock_at<=now()) order by created_at desc limit 100', [coupleId]); res.json({ messages: result.rows }); } catch (error) { next(error); } });
@@ -129,7 +172,7 @@ app.get('/v1/relationship-score', requireAuth, async (req: AuthedRequest, res, n
 attachFeatureRoutes(app, pool, requireAuth);
 attachSpotifyRoutes(app, pool, requireAuth);
 app.get('/v1/auth/:provider/start', (req, res) => { const provider = req.params.provider; if (provider !== 'google' && provider !== 'apple') return res.status(404).json({ error: 'unsupported_provider' }); res.status(501).json({ error: 'oauth_not_configured', provider }); });
-app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => { if (error instanceof z.ZodError) return res.status(400).json({ error: 'validation_error', details: error.flatten() }); if ((error as { code?: string }).code === '23505') return res.status(409).json({ error: 'already_exists' }); if (error instanceof Error && error.message === 'cors_not_allowed') return res.status(403).json({ error: 'cors_not_allowed' }); console.error(error); res.status(500).json({ error: 'internal_error' }); });
+app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => { if (error instanceof z.ZodError) return res.status(400).json({ error: 'validation_error', details: error.flatten() }); if ((error as { code?: string }).code === '23505') return res.status(409).json({ error: 'already_exists' }); if (error instanceof Error && error.message === 'cors_not_allowed') return res.status(403).json({ error: 'cors_not_allowed' }); if (error instanceof Error && error.message === 'secure_transport_required') return res.status(400).json({ error: 'secure_transport_required' }); if (error instanceof Error && error.message.startsWith('production_')) return res.status(500).json({ error: 'invalid_production_configuration' }); console.error(error); res.status(500).json({ error: 'internal_error' }); });
 
 const server = createServer(app);
 attachRealtime(server, pool, env.JWT_SECRET);
