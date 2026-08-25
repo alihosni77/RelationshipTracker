@@ -1,6 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:4000';
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://127.0.0.1:4000';
 const TOKEN_KEY = 'relationship_tracker_access_token';
 
 export async function setToken(token: string) { await SecureStore.setItemAsync(TOKEN_KEY, token); }
