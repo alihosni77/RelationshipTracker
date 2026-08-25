@@ -1,0 +1,19 @@
+services:
+  database:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: relationship_tracker
+      POSTGRES_USER: relationship
+      POSTGRES_PASSWORD: relationship_dev_only
+    ports: ["5432:5432"]
+    volumes: ["postgres_data:/var/lib/postgresql/data", "./server/sql:/docker-entrypoint-initdb.d:ro"]
+  api:
+    build: ./server
+    environment:
+      DATABASE_URL: postgresql://relationship:relationship_dev_only@database:5432/relationship_tracker
+      JWT_SECRET: replace-this-in-production
+      PORT: "4000"
+    ports: ["4000:4000"]
+    depends_on: [database]
+volumes:
+  postgres_data:
