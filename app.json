@@ -1,8 +1,8 @@
 {
   "expo": {
     "name": "RelationshipTracker", "slug": "relationship-tracker", "version": "0.1.0", "orientation": "portrait", "scheme": "relationshiptracker", "userInterfaceStyle": "dark",
-    "plugins": ["expo-router", "expo-haptics"],
-    "ios": { "supportsTablet": true, "infoPlist": { "NSLocationWhenInUseUsageDescription": "Location is shared only after you explicitly agree." } },
-    "android": { "permissions": ["VIBRATE", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "POST_NOTIFICATIONS"] }
+    "plugins": ["expo-router", "expo-haptics", "expo-secure-store", "expo-notifications", "expo-location"],
+    "ios": { "supportsTablet": true, "infoPlist": { "NSLocationWhenInUseUsageDescription": "Location is shared only after you explicitly agree.", "NSLocationAlwaysAndWhenInUseUsageDescription": "Background location is only used during an explicitly enabled sharing session." } },
+    "android": { "permissions": ["VIBRATE", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "ACCESS_BACKGROUND_LOCATION", "POST_NOTIFICATIONS"] }
   }
 }
