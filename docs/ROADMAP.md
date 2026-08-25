@@ -1,54 +1,64 @@
-# RelationshipTracker implementation roadmap
+# RelationshipTracker implementation status
 
-## Phase 1 — foundation (current)
+## Mobile
 
-- [x] Expo / React Native application shell
-- [x] Shared dashboard and feature navigation
-- [x] Couple data model and invitation flow API
-- [x] Normal / encrypted / time-capsule message API contract
-- [x] Love Tap API
-- [x] Shared events API
-- [x] Relationship rating API with rate limiting
-- [x] Balanced relationship-score endpoint
-- [x] Persistence schema for location, cycle, Spotify, playback and assessments
-- [x] CI type checks
+- [x] Expo / React Native cross-platform shell
+- [x] Persian-first RTL UI
+- [x] Authentication UI with secure token storage
+- [x] Couple dashboard
+- [x] Normal / encrypted / time-capsule messaging UI
+- [x] Client-side PBKDF2 + AES-GCM secret-message encryption
+- [x] Server-time Time Capsule release enforcement
+- [x] Realtime Love Tap haptics
+- [x] Push-token registration
+- [x] Shared events with next-event countdown
+- [x] Relationship rating UI
+- [x] Relationship check-in UI
+- [x] Activity/date recommendations and saving
+- [x] Consent-based location sharing with expiry and partner location display
+- [x] Cycle-aware private support flow
+- [x] Spotify connection entry point and shared playback state
+- [x] EAS build profiles
 
-## Phase 2 — realtime + secure sync
+## Backend
 
-- [ ] WebSocket / realtime delivery for messages and Love Tap
-- [ ] Push notification registration and delivery
-- [ ] Audited client-side encryption library for encrypted messages
-- [ ] Server-enforced Time Capsule release
-- [ ] Couple membership authorization middleware on every sensitive route
-- [ ] Consent grant/revoke endpoints
+- [x] Password authentication with bcrypt
+- [x] Short-lived JWT access tokens
+- [x] Couple creation, invitation, acceptance and membership checks
+- [x] Message persistence and realtime broadcast
+- [x] Love Tap persistence, realtime broadcast and Expo push delivery
+- [x] Shared event persistence
+- [x] Relationship rating rate limiting and bilateral score confidence
+- [x] Consent grant/revoke
+- [x] Expiring location sharing
+- [x] Encrypted cycle-entry persistence with explicit partner sharing
+- [x] Activity persistence and recommendations
+- [x] Playback session synchronization state
+- [x] Relationship assessments and encrypted result storage
+- [x] Spotify PKCE authorization and encrypted token storage
+- [x] Realtime websocket authentication
 
-## Phase 3 — shared life
+## Quality / release
 
-- [ ] Full calendar UI and recurring events
-- [ ] Spotify OAuth with PKCE
-- [ ] Shared playlist editing
-- [ ] Playback synchronization state machine with drift correction
-- [ ] Activity recommendation engine
+- [x] TypeScript CI for mobile and API
+- [x] Scoring unit tests
+- [x] PostgreSQL migration CI checks
+- [x] EAS development / preview / production profiles
+- [x] Threat model and production security checklist
 
-## Phase 4 — sensitive features
+## External configuration still required
 
-- [ ] Explicit location-sharing sessions with expiry and revocation
-- [ ] Secure location update endpoint and privacy-preserving retention
-- [ ] Cycle tracking encrypted storage and selective partner visibility
-- [ ] Support suggestions that never affect relationship scoring
-
-## Phase 5 — quality and release
-
-- [ ] Unit tests for scoring, capsule timing and permissions
-- [ ] API integration tests with PostgreSQL
-- [ ] Mobile E2E tests
-- [ ] Security review and threat model
-- [ ] App Store / Google Play build profiles
+- Spotify developer application credentials and redirect URI
+- Production database and JWT/Spotify encryption secrets
+- Expo/EAS project configuration and push credentials
+- Production HTTPS domain / reverse proxy
+- Store accounts and final App Store / Google Play metadata
+- Independent security review before public production launch
 
 ## Product invariants
 
-- Location and cycle data are opt-in and revocable.
-- Cycle/health data never contributes to relationship scoring.
-- Relationship scores are advisory, never punitive or coercive.
-- Time Capsule access is controlled by server time, not device time.
-- Passwords and OAuth tokens are never stored in plaintext.
+- Location sharing is explicit, time-bounded, and revocable.
+- Cycle/wellbeing data is separate from relationship scoring.
+- Relationship scores are advisory and require balanced feedback.
+- Time Capsules use server-side unlock time.
+- Plaintext passwords, message plaintext, and raw provider tokens are not persisted.
